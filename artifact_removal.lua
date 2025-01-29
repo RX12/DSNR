@@ -1,41 +1,68 @@
-local darktable = require "darktable"
-
--- Script metadata
-local script_name = "artifact_removal"
-local script_description = "Remove digital sharpening artifacts from images"
-local script_author = "Your Name"
-local script_version = "1.0"
+-- Load Darktable Lua API
+local dt = require "darktable"
+local df = require "lib/dtutils.file"
 
 -- Plugin metadata
-darktable.register_event("initialize", function()
-    -- Register preferences
-    darktable.preferences.register(script_name, "edge_threshold", "float",
+dt.register_event("initialize", function()
+    dt.preferences.register("artifact_detection", "edge_threshold", "float",
         "Edge detection threshold", "Threshold for detecting sharpening artifacts (0.0 to 1.0)", 0.1, 0.0, 1.0, 0.01)
-    darktable.preferences.register(script_name, "smoothing_strength", "float",
-        "Smoothing strength", "Strength of artifact smoothing (0.0 to 1.0)", 0.5, 0.0, 1.0, 0.01)
-
-    darktable.print(script_name .. " plugin initialized")
+    dt.print("Artifact Detection plugin initialized.")
 end)
 
--- Main plugin function
-darktable.register_event("post-import-image", function(event, image)
-    -- Check if the plugin is enabled
-    if not darktable.preferences.read(script_name, "bool", true) then
-        darktable.print(script_name .. " is disabled")
+-- Function to create a mask for sharpening artifacts
+local function create_artifact_mask(image)
+    dt.print("Analyzing image for sharpening artifacts...")
+
+    -- Read the user-defined edge detection threshold
+    local edge_threshold = dt.preferences.read("artifact_detection", "edge_threshold", "float")
+
+    -- Create a parametric mask based on edge detection
+    local mask = {}
+    local width, height = image.width, image.height
+    local pixels = image:read_pixel_data() -- Get pixel data from the image
+
+    -- Check if the image has pixel data
+    if not pixels then
+        dt.print("Error: Unable to read pixel data from the image.")
         return
     end
 
-    darktable.print("Processing image: " .. image.filename)
+    -- Simple edge detection (Sobel-like algorithm)
+    for y = 2, height - 1 do
+        for x = 2, width - 1 do
+            local idx = (y - 1) * width + (x - 1)
+            local pixel = pixels[idx]
 
-    -- Get user-defined parameters
-    local edge_threshold = darktable.preferences.read(script_name, "edge_threshold", "float")
-    local smoothing_strength = darktable.preferences.read(script_name, "smoothing_strength", "float")
+            -- Calculate a simple edge detection value
+            local edge_value = math.abs(pixel - pixels[idx - 1]) + math.abs(pixel - pixels[idx + 1])
 
-    darktable.print("Edge threshold: " .. edge_threshold)
-    darktable.print("Smoothing strength: " .. smoothing_strength)
+            -- Apply thresholding
+            mask[idx] = (edge_value > edge_threshold) and 1 or 0
+        end
+    end
 
-    -- Placeholder for artifact removal logic
-    darktable.print("Artifact removal logic would run here")
+    dt.print("Edge detection complete.")
 
-    darktable.print("Artifact removal completed for image: " .. image.filename)
-end)
+    -- Convert mask into a parametric mask
+    image:attach_mask(mask)
+
+    dt.print("Mask created successfully for sharpening artifacts.")
+end
+
+-- Register a UI action for the plugin
+dt.register_lib("artifact_detection", "Artifact Detection", true, false, {
+    [dt.gui.views.lighttable] = {true, false, "analyze_image"}
+}, nil, {
+    dt.new_widget("button") {
+        label = "Analyze for Artifacts",
+        clicked_callback = function()
+            local image = dt.gui.action_images[1] -- Get the currently selected image
+            if not image then
+                dt.print("Please select an image.")
+                return
+            end
+
+            create_artifact_mask(image)
+        end
+    }
+})
