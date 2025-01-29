@@ -8,18 +8,25 @@ darktable.register_event("initialize", function()
         "Edge detection threshold", "Threshold for detecting sharpening artifacts (0.0 to 1.0)", 0.1, 0.0, 1.0, 0.01)
     darktable.preferences.register("artifact_removal", "smoothing_strength", "float",
         "Smoothing strength", "Strength of artifact smoothing (0.0 to 1.0)", 0.5, 0.0, 1.0, 0.01)
+    darktable.print("Artifact removal plugin initialized")
 end)
 
 -- Main plugin function
 darktable.register_event("post-import", function(event, image)
     -- Check if the plugin is enabled
     if not darktable.preferences.read("artifact_removal", "bool", true) then
+        darktable.print("Plugin is disabled")
         return
     end
+
+    darktable.print("Processing image: " .. image.filename)
 
     -- Get user-defined parameters
     local edge_threshold = darktable.preferences.read("artifact_removal", "edge_threshold", "float")
     local smoothing_strength = darktable.preferences.read("artifact_removal", "smoothing_strength", "float")
+
+    darktable.print("Edge threshold: " .. edge_threshold)
+    darktable.print("Smoothing strength: " .. smoothing_strength)
 
     -- Get the image's pixel data
     local pixels = image:get_pixels()
@@ -32,10 +39,14 @@ darktable.register_event("post-import", function(event, image)
 
     -- Create a parametric mask from the edge detection results
     create_parametric_mask(image, mask)
+
+    darktable.print("Artifact removal completed for image: " .. image.filename)
 end)
 
 -- Function to remove artifacts
 function remove_artifacts(pixels, edge_threshold, smoothing_strength)
+    darktable.print("Removing artifacts...")
+
     -- Convert pixels to grayscale for edge detection
     local gray_pixels = grayscale(pixels)
 
@@ -45,7 +56,7 @@ function remove_artifacts(pixels, edge_threshold, smoothing_strength)
     -- Apply smoothing to artifact regions
     local smoothed_pixels = smooth_artifacts(pixels, edges, smoothing_strength)
 
-    -- Return the mask and processed pixels
+    darktable.print("Artifact removal complete")
     return edges, smoothed_pixels
 end
 
@@ -82,6 +93,7 @@ function detect_edges(pixels, threshold)
         end
     end
 
+    darktable.print("Edge detection complete")
     return edges
 end
 
@@ -117,6 +129,7 @@ function smooth_artifacts(pixels, edges, strength)
         end
     end
 
+    darktable.print("Smoothing complete")
     return smoothed_pixels
 end
 
@@ -142,4 +155,6 @@ function create_parametric_mask(image, mask)
     -- Use the mask image as a parametric mask
     local mask_module = darktable.gui.libs.mask
     mask_module.add_shape(mask_image, "parametric")
+
+    darktable.print("Parametric mask created")
 end
